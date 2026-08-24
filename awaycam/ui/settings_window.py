@@ -235,10 +235,23 @@ class SettingsWindow(QDialog):
         away_form = QFormLayout(away_box)
         away_form.setSpacing(12)
 
-        self.away_combo = QComboBox()
+        # 秒数は自由に決められるようにする（1秒〜1時間）
+        self.away_spin = QSpinBox()
+        self.away_spin.setRange(1, 3600)
+        self.away_spin.setSuffix(" 秒")
+        self.away_spin.valueChanged.connect(self._validate_timing)
+        away_form.addRow("離席判定までの時間", self.away_spin)
+
+        preset_row = QHBoxLayout()
+        preset_row.setSpacing(6)
         for seconds in AWAY_SECONDS_CHOICES:
-            self.away_combo.addItem(f"{seconds} 秒", seconds)
-        away_form.addRow("離席判定までの時間", self.away_combo)
+            button = QPushButton(f"{seconds}秒")
+            # 固定幅にすると「30秒」等が切れるので最小幅にとどめる
+            button.setMinimumWidth(72)
+            button.clicked.connect(lambda _c, v=seconds: self.away_spin.setValue(v))
+            preset_row.addWidget(button)
+        preset_row.addStretch(1)
+        away_form.addRow("よく使う値", preset_row)
 
         self.interval_spin = QSpinBox()
         self.interval_spin.setRange(200, 5000)
@@ -288,8 +301,8 @@ class SettingsWindow(QDialog):
     def _validate_timing(self) -> None:
         """離席判定時間がチェック間隔より長いことを確認して警告を出す。"""
         interval_s = self.interval_spin.value() / 1000.0
-        away_s = self.away_combo.currentData()
-        if away_s is not None and away_s <= interval_s:
+        away_s = self.away_spin.value()
+        if away_s <= interval_s:
             self.timing_warning.setText(
                 f"離席判定時間（{away_s}秒）はカメラチェック間隔"
                 f"（{interval_s:.1f}秒）より長くしてください。"
@@ -579,14 +592,7 @@ class SettingsWindow(QDialog):
         )
         self._update_shoulder_state()
 
-        away_index = self.away_combo.findData(s.away_seconds)
-        if away_index < 0:
-            # 設定ファイルを手で編集した値も選べるようにしておく
-            self.away_combo.addItem(f"{s.away_seconds} 秒", s.away_seconds)
-            away_index = self.away_combo.count() - 1
-        self.away_combo.setCurrentIndex(away_index)
-        self.away_combo.currentIndexChanged.connect(self._validate_timing)
-
+        self.away_spin.setValue(s.away_seconds)
         self.interval_spin.setValue(s.check_interval_ms)
         self.away_interval_spin.setValue(s.away_check_interval_ms)
         self.hits_spin.setValue(s.return_consecutive_hits)
@@ -629,7 +635,7 @@ class SettingsWindow(QDialog):
         s.min_person_height_ratio = self.distance_slider.value() / 100.0
         s.min_shoulder_width_ratio = self.shoulder_slider.value() / 100.0
 
-        s.away_seconds = int(self.away_combo.currentData())
+        s.away_seconds = self.away_spin.value()
         s.check_interval_ms = self.interval_spin.value()
         s.away_check_interval_ms = self.away_interval_spin.value()
         s.return_consecutive_hits = self.hits_spin.value()
@@ -675,7 +681,7 @@ class SettingsWindow(QDialog):
         new_settings = self._collect_from_widgets()
 
         # 補正が入った場合は黙って変えず、利用者に伝える
-        if new_settings.away_seconds != int(self.away_combo.currentData()):
+        if new_settings.away_seconds != self.away_spin.value():
             QMessageBox.information(
                 self,
                 "設定を調整しました",

@@ -12,7 +12,7 @@
   "yolo_model_path": "I:\\Programming\\PF\\2026\\8\\AwayCam\\models\\yolo26n.pt",
   "yolo_imgsz": 480,
   "mediapipe_model_path": "I:\\Programming\\PF\\2026\\8\\AwayCam\\models\\efficientdet_lite0.tflite",
-  "away_seconds": 2,
+  "away_seconds": 1,
   "return_consecutive_hits": 2,
   "return_on_user_input": true,
   "image_paths": [

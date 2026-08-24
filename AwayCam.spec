@@ -29,28 +29,46 @@ datas += collect_data_files("ultralytics")
 datas += collect_data_files("mediapipe")
 
 # --- 動的 import されるモジュール ---
+# ultralytics は collect_submodules しない。
+# 全サブモジュールを手繰ると、学習・エクスポート用の重い任意依存
+# （xformers / bitsandbytes / polars / playwright / numba …）まで
+# 引き込まれて 3GB 以上肥大化する。推論に必要な分は通常の import 解析で足りる。
 hiddenimports = [
     "pycaw",
     "comtypes",
     "comtypes.stream",   # pycaw が実行時に読む
     "pygrabber",
     "pygrabber.dshow_graph",
+    "ultralytics",
+    "ultralytics.nn.tasks",
+    "ultralytics.models.yolo",
 ]
-hiddenimports += collect_submodules("ultralytics")
 
 # --- 不要な依存を落としてサイズを抑える ---
+# torch の内部モジュール（torch.testing など）は除外しないこと。
+# torch 自身が import しており、外すと「No module named 'torch.testing'」で
+# ultralytics ごと読み込めなくなる。
 excludes = [
     "tkinter",
-    "matplotlib",     # ultralytics が描画に使うが AwayCam では未使用
+    "matplotlib",      # ultralytics の描画用。AwayCam では未使用
     "IPython",
     "notebook",
     "pytest",
     "PyQt5",
     "PyQt6",
     "PySide2",
-    "torchvision.datasets",
-    "torch.distributions",
-    "torch.testing",
+    # --- ultralytics の学習・エクスポート専用の重い任意依存 ---
+    "xformers",
+    "bitsandbytes",
+    "polars",
+    "playwright",
+    "numba",
+    "llvmlite",
+    "yt_dlp",
+    "tensorboard",
+    "onnx",
+    "onnxruntime",
+    "tensorflow",
 ]
 
 a = Analysis(

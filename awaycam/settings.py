@@ -25,6 +25,7 @@ DEFAULT_MEDIAPIPE_MODEL_PATH = resource_path("models", "efficientdet_lite0.tflit
 DETECTOR_BACKENDS = ["yolo26-pose", "yolo26", "mediapipe"]
 
 # 選択肢（GUI のプルダウンと共有する）
+# 設定画面のショートカット用。秒数自体は 1〜3600 の範囲で自由に指定できる。
 AWAY_SECONDS_CHOICES = [3, 5, 10, 30, 60]
 DISPLAY_MODES = ["fit", "fill", "center"]          # フィット / 埋める / 原寸中央
 MONITOR_TARGETS = ["all", "primary", "index"]      # 全モニター / メイン / 指定

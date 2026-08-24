@@ -47,6 +47,22 @@ exe 版では、レジストリに **exe のパスが直接**登録されます
 設定画面で自動起動を一度オフ→オンにするか、`autostart.sync_if_stale()` が
 起動時に自動で登録し直します。
 
+## 再ビルド時の注意
+
+`--noconfirm` は `dist/AwayCam` を作り直すため、**exe の隣に置かれた
+`settings.json` と `logs/` は消えます。** 調整済みの設定を引き継ぐなら、
+ビルド前後で退避・復元してください。
+
+```powershell
+Copy-Item dist\AwayCam\settings.json $env:TEMP\awaycam_settings.json -Force
+python -m PyInstaller AwayCam.spec --noconfirm
+Copy-Item $env:TEMP\awaycam_settings.json dist\AwayCam\settings.json -Force
+```
+
+また、AwayCam が起動していると exe を上書きできません。ビルド前に
+トレイから終了させてください。多重起動防止があるため、Python 版が
+動いたままだと exe を起動しても即終了します。
+
 ## 注意点
 
 - **UPX 圧縮は使っていません。** torch の DLL を壊すことがあるためです。
