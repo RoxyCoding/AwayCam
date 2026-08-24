@@ -1,0 +1,7 @@
+.venv/
+tests/
+tests/smoke_pipeline.py
+tests/test_distance_filter.py
+tests/test_presence.py
+img.png
+logs/
