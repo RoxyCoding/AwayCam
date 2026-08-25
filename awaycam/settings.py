@@ -65,6 +65,12 @@ class Settings:
     # 両肩の間隔がフレーム幅のこの割合「以下」なら遠いとみなす（姿勢検出時のみ）。
     # 矩形の高さより姿勢の 変動しにくい。0.0 で無効。
     min_shoulder_width_ratio: float = 0.30
+    # 離席がこの秒数を超えたら、復帰の判定を厳しくする。
+    # 反応距離ギリギリ（しきい値をわずかに超えただけ）の検出では在席に戻さない。
+    long_away_seconds: int = 60
+    # 長時間離席後の復帰に求める、距離しきい値からの上乗せ割合。
+    # 例: 0.15 なら肩幅/高さがしきい値の 1.15 倍を超えて初めて復帰する。
+    long_away_return_margin: float = 0.15
     # 検出方式:
     #   yolo26-pose … 姿勢推定つき（既定）。肩幅で距離を測るので誤離席が少ない
     #   yolo26      … 人物検出のみ
@@ -145,6 +151,8 @@ class Settings:
             self.away_check_interval_ms, self.check_interval_ms
         )
         self.detection_confidence = _clampf(float(self.detection_confidence), 0.05, 0.95)
+        self.long_away_seconds = max(0, int(self.long_away_seconds))
+        self.long_away_return_margin = _clampf(float(self.long_away_return_margin), 0.0, 2.0)
         self.min_person_height_ratio = _clampf(float(self.min_person_height_ratio), 0.0, 0.95)
         self.min_shoulder_width_ratio = _clampf(float(self.min_shoulder_width_ratio), 0.0, 0.95)
         self.return_consecutive_hits = _clamp(int(self.return_consecutive_hits), 1, 10)

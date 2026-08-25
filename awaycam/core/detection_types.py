@@ -126,6 +126,20 @@ class BasePersonDetector(ABC):
                 return True
         return box.height_ratio > self.min_height_ratio
 
+    def is_clearly_near(self, box: PersonBox, margin: float) -> bool:
+        """しきい値ギリギリではなく、明らかに近いと言えるか。
+
+        長時間の離席から復帰させるときに使う。反応距離ちょうどの位置に
+        人物が写っただけで在席に戻ると、席にいないのに画像が消えてしまう。
+        """
+        if margin <= 0:
+            return self._classify(box)
+        scale = 1.0 + margin
+        if box.has_shoulders and self.min_shoulder_ratio > 0:
+            if box.shoulder_ratio > self.min_shoulder_ratio * scale:
+                return True
+        return box.height_ratio > self.min_height_ratio * scale
+
     def _split_by_distance(
         self, candidates: list[PersonBox], elapsed_ms: float
     ) -> DetectionResult:

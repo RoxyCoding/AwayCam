@@ -54,6 +54,7 @@ class DetectionEngine(QThread):
             away_seconds=settings.away_seconds,
             return_consecutive_hits=settings.return_consecutive_hits,
             return_on_user_input=settings.return_on_user_input,
+            long_away_seconds=settings.long_away_seconds,
             on_state_change=self._emit_state_change,
         )
 
@@ -270,8 +271,16 @@ class DetectionEngine(QThread):
             camera_ok=camera_ok,
             user_input_recent=self._had_recent_input(),
             best_score=result.best_score,
+            person_clearly_near=self._is_clearly_near(result),
         )
         self.snapshot_ready.emit(snapshot)
+
+    def _is_clearly_near(self, result: DetectionResult) -> bool:
+        """反応距離ギリギリではなく、確実に近いと言える人物が写っているか。"""
+        margin = self.settings.long_away_return_margin
+        return any(
+            self.detector.is_clearly_near(box, margin) for box in result.boxes
+        )
 
     def _current_interval_ms(self) -> int:
         """現在の状態に応じたチェック間隔。
@@ -384,6 +393,7 @@ class DetectionEngine(QThread):
             away_seconds=settings.away_seconds,
             return_consecutive_hits=settings.return_consecutive_hits,
             return_on_user_input=settings.return_on_user_input,
+            long_away_seconds=settings.long_away_seconds,
         )
         self.tracker.set_enabled(settings.enabled)
 

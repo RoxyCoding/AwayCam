@@ -44,12 +44,15 @@ class PresenceTracker:
         away_seconds: int = 10,
         return_consecutive_hits: int = 3,
         return_on_user_input: bool = True,
+        long_away_seconds: int = 60,
         on_state_change: Optional[Callable[[PresenceState, PresenceState], None]] = None,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self.away_seconds = away_seconds
         self.return_consecutive_hits = return_consecutive_hits
         self.return_on_user_input = return_on_user_input
+        # 離席がこの秒数を超えたら、カメラによる復帰に「明らかに近い」検出を求める
+        self.long_away_seconds = long_away_seconds
         self.on_state_change = on_state_change
         self._clock = clock
 
@@ -59,6 +62,7 @@ class PresenceTracker:
         self._last_person_present = False
         self._last_score = 0.0
         self._manual_override = False     # 手動表示/手動解除の最中か
+        self._away_since: Optional[float] = None  # 離席に入った時刻
 
     # --- 設定の反映 ---
 
@@ -67,6 +71,7 @@ class PresenceTracker:
         away_seconds: Optional[int] = None,
         return_consecutive_hits: Optional[int] = None,
         return_on_user_input: Optional[bool] = None,
+        long_away_seconds: Optional[int] = None,
     ) -> None:
         if away_seconds is not None:
             self.away_seconds = away_seconds
@@ -74,6 +79,8 @@ class PresenceTracker:
             self.return_consecutive_hits = return_consecutive_hits
         if return_on_user_input is not None:
             self.return_on_user_input = return_on_user_input
+        if long_away_seconds is not None:
+            self.long_away_seconds = long_away_seconds
 
     # --- 判定本体 ---
 
@@ -83,6 +90,7 @@ class PresenceTracker:
         camera_ok: bool,
         user_input_recent: bool = False,
         best_score: float = 0.0,
+        person_clearly_near: bool = True,
     ) -> PresenceSnapshot:
         """1回の判定サイクルを進め、現在の状況を返す。"""
         now = self._clock()
@@ -116,6 +124,13 @@ class PresenceTracker:
 
         # --- カメラによる判定 ---
         if person_present:
+            # 長時間の離席から戻すときは、反応距離ギリギリの検出では復帰させない。
+            # 席にいないのに画像が消えてしまうのを防ぐため。
+            if self.state is PresenceState.AWAY and self._in_long_away(now):
+                if not person_clearly_near:
+                    self._consecutive_hits = 0
+                    return self._snapshot(now, "もう少し近づいてください")
+
             self._consecutive_hits += 1
             self._last_seen_at = now
             # 離席中は連続 N 回の検出で初めて復帰（一瞬の誤検出で戻さない）
@@ -192,6 +207,12 @@ class PresenceTracker:
 
     # --- 内部処理 ---
 
+    def _in_long_away(self, now: float) -> bool:
+        """離席が long_away_seconds を超えて続いているか。"""
+        if self.long_away_seconds <= 0 or self._away_since is None:
+            return False
+        return (now - self._away_since) >= self.long_away_seconds
+
     def _user_input_returns(self, user_input_recent: bool) -> bool:
         return self.return_on_user_input and user_input_recent
 
@@ -200,6 +221,7 @@ class PresenceTracker:
             return
         old_state = self.state
         self.state = new_state
+        self._away_since = self._clock() if new_state is PresenceState.AWAY else None
         if new_state is not PresenceState.AWAY:
             self._manual_override = False
         if self.on_state_change is not None:
