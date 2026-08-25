@@ -27,6 +27,12 @@ DETECTOR_BACKENDS = ["yolo26-pose", "yolo26", "mediapipe"]
 # 選択肢（GUI のプルダウンと共有する）
 # 設定画面のショートカット用。秒数自体は 1〜3600 の範囲で自由に指定できる。
 AWAY_SECONDS_CHOICES = [3, 5, 10, 30, 60]
+
+# チェック間隔の下限（ミリ秒）。
+# GPU 推論は 1 回 8ms 程度なので処理は追いつくが、実際の周期はカメラの
+# フレームレートで頭打ちになる（30fps なら 33ms より速くはならない）。
+# これ以上短くしても判定は速くならず、GPU 使用率だけが上がる。
+MIN_CHECK_INTERVAL_MS = 30
 DISPLAY_MODES = ["fit", "fill", "center"]          # フィット / 埋める / 原寸中央
 MONITOR_TARGETS = ["all", "primary", "index"]      # 全モニター / メイン / 指定
 PAUSE_DURATION_CHOICES = [5, 15, 30, 60, 0]        # 分。0 = 再開するまで
@@ -128,8 +134,12 @@ class Settings:
             int(self.slideshow_interval_seconds), 1, 3600
         )
 
-        self.check_interval_ms = _clamp(int(self.check_interval_ms), 200, 5000)
-        self.away_check_interval_ms = _clamp(int(self.away_check_interval_ms), 100, 5000)
+        self.check_interval_ms = _clamp(
+            int(self.check_interval_ms), MIN_CHECK_INTERVAL_MS, 5000
+        )
+        self.away_check_interval_ms = _clamp(
+            int(self.away_check_interval_ms), MIN_CHECK_INTERVAL_MS, 5000
+        )
         # 離席中の間隔が在席中より長いと復帰が遅くなるだけなので、上限を揃える
         self.away_check_interval_ms = min(
             self.away_check_interval_ms, self.check_interval_ms

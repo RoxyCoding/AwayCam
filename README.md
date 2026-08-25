@@ -66,32 +66,3 @@ python -m venv .venv
 python scripts/calibrate_distance.py
 ```
 
-## 安全のための設計
-
-- **カメラが使えない間は離席と判定しません。** 真っ黒な映像を離席と誤認して
-  画像を出しっぱなしにしないためです（状態は「カメラエラー」になります）。
-- **キーボード / マウス操作があれば、カメラ判定を待たず即座に復帰します。**
-- **Esc キーでいつでも手動解除できます。**
-- **音声ミュートは自分が消したときだけ解除します。** 離席前からユーザーが
-  ミュートしていた場合、復帰時に勝手に音を出しません。終了時にも必ず戻します。
-
-## テスト
-
-```bash
-.venv/Scripts/python.exe tests/test_presence.py           # 在席判定ロジック（実時間を待たない）
-.venv/Scripts/python.exe tests/test_shoulder_filter.py    # 肩幅・高さによる距離判定
-.venv/Scripts/python.exe tests/test_fullscreen_monitor.py # 全画面検出の除外ロジック
-.venv/Scripts/python.exe tests/test_audio_mute.py         # 音声ミュート（元の状態に必ず戻す）
-.venv/Scripts/python.exe tests/smoke_pipeline.py [カメラ番号]  # 実カメラでの疎通確認
-```
-
-## 実装状況
-
-- [x] フェーズ1: Webカメラ → 人物検出 → 離席判定 → 画像表示
-- [x] フェーズ2: 設定GUI（カメラプレビュー・バウンディングボックス・手動テスト）
-- [x] フェーズ3: タスクトレイ（状態インジケーター・多重起動防止）
-- [x] フェーズ4a: マルチモニター設定 / 自動起動 / 一時停止の時間指定
-- [x] 離席中の出力音声ミュート
-- [x] 全画面アプリ（ゲーム・動画・プレゼン）使用中の自動一時停止
-- [ ] フェーズ4b: グローバルホットキー
-- [ ] フェーズ5: UI改善

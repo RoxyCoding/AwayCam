@@ -42,6 +42,7 @@ from ..core.detector import BACKEND_MEDIAPIPE, BACKEND_POSE, BACKEND_YOLO26
 from ..logging_setup import get_logger
 from ..settings import (
     AWAY_SECONDS_CHOICES,
+    MIN_CHECK_INTERVAL_MS,
     SUPPORTED_IMAGE_SUFFIXES,
     Settings,
 )
@@ -254,8 +255,8 @@ class SettingsWindow(QDialog):
         away_form.addRow("よく使う値", preset_row)
 
         self.interval_spin = QSpinBox()
-        self.interval_spin.setRange(200, 5000)
-        self.interval_spin.setSingleStep(100)
+        self.interval_spin.setRange(MIN_CHECK_INTERVAL_MS, 5000)
+        self.interval_spin.setSingleStep(10)
         self.interval_spin.setSuffix(" ms")
         self.interval_spin.valueChanged.connect(self._validate_timing)
         away_form.addRow("カメラチェック間隔", self.interval_spin)
@@ -277,8 +278,8 @@ class SettingsWindow(QDialog):
         return_form.addRow("復帰に必要な連続検出回数", self.hits_spin)
 
         self.away_interval_spin = QSpinBox()
-        self.away_interval_spin.setRange(100, 5000)
-        self.away_interval_spin.setSingleStep(100)
+        self.away_interval_spin.setRange(MIN_CHECK_INTERVAL_MS, 5000)
+        self.away_interval_spin.setSingleStep(10)
         self.away_interval_spin.setSuffix(" ms")
         return_form.addRow("離席中のチェック間隔（短いほど復帰が速い）", self.away_interval_spin)
 
