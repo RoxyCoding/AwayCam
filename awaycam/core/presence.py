@@ -161,6 +161,16 @@ class PresenceTracker:
         self._consecutive_hits = self.return_consecutive_hits
         self._transition(PresenceState.PRESENT)
 
+    def restart_timer(self) -> None:
+        """離席までのカウントを今から数え直す（状態は変えない）。
+
+        PC のスリープなどで判定ループが止まっていた場合、その時間まで
+        「人が写らなかった時間」として数えると、復帰した瞬間に離席と
+        判定されてしまう。復帰後は改めて away_seconds を数え直す。
+        """
+        self._last_seen_at = self._clock()
+        self._consecutive_hits = 0
+
     def set_paused(self, paused: bool) -> None:  # noqa: D102
         if paused:
             self._transition(PresenceState.PAUSED)

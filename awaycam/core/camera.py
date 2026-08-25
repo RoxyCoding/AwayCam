@@ -174,6 +174,19 @@ class Camera:
             log.info("カメラ %d を解放しました", self.index)
         self.state = CameraState.CLOSED
 
+    def reset(self) -> None:
+        """デバイスを捨てて、次の周期で即座に開き直せる状態にする。
+
+        スリープ復帰後は OS 側でデバイスが再列挙され、開いたままの
+        ハンドルは無効になっている。再接続の待ち時間（指数バックオフ）も
+        持ち越さず、すぐ開き直せるようにここで初期化する。
+        """
+        self.release()
+        self._reconnect_delay_s = self._reconnect_min_s
+        self._next_retry_at = 0.0
+        self._consecutive_read_failures = 0
+        self.last_error = ""
+
     @property
     def is_open(self) -> bool:
         return self._capture is not None and self.state is CameraState.RUNNING

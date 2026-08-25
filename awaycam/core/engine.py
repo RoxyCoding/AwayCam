@@ -25,6 +25,11 @@ log = get_logger("engine")
 # Alt+Tab や検索画面のように一瞬だけ全画面になるものを無視するため。
 FULLSCREEN_DEBOUNCE_CHECKS = 3
 
+# 1周期の間に実時計でこれ以上の時間が飛んでいたら、PC がスリープ / 休止して
+# いたとみなす。OS からの電源通知が届かなかった場合の保険。
+# （通常の周期は長くても数秒。GC や一時的な高負荷と区別できる長さにしてある）
+SLEEP_GAP_SECONDS = 20.0
+
 
 class DetectionEngine(QThread):
     """常駐する判定ループ。"""
@@ -64,6 +69,12 @@ class DetectionEngine(QThread):
         self._fullscreen_streak = 0
         self._last_reported_error = ""
         self._pending_reconfigure = False
+        # 前の周期を終えた実時計の時刻。スリープ復帰の検知に使う。
+        # monotonic はスリープ中に進まないことがあるため、ここでは壁時計を使う。
+        self._last_cycle_wall: Optional[float] = None
+        # OS からの電源通知（UI スレッドから立てられ、判定ループが読む）
+        self._suspending = False
+        self._resume_pending = False
 
     # --- 外部からの操作（UI スレッドから呼ばれる） ---
 
@@ -119,6 +130,18 @@ class DetectionEngine(QThread):
         """設定画面が開いている間だけフレームを送る（無駄なコピーを避ける）。"""
         self._preview_requested = enabled
 
+    def notify_system_suspend(self) -> None:
+        """スリープに入る直前に UI スレッドから呼ばれる。
+
+        デバイスが消えた後のハンドルを read() すると戻ってこないことがあり、
+        判定ループごと固まってしまう。眠る前に手放しておく。
+        """
+        self._suspending = True
+
+    def notify_system_resume(self) -> None:
+        """スリープから復帰したときに UI スレッドから呼ばれる。"""
+        self._resume_pending = True
+
     def apply_settings(self, settings: Settings) -> None:
         """設定変更を次のループで反映する。"""
         self.settings = settings
@@ -134,18 +157,33 @@ class DetectionEngine(QThread):
         while self._running:
             cycle_started = time.monotonic()
 
-            if self._pending_reconfigure:
-                self._reconfigure()
+            try:
+                if self._handle_power_state():
+                    # スリープ中 / 復帰処理中。この周期は判定しない。
+                    self._last_cycle_wall = time.time()
+                    self.msleep(500)
+                    continue
 
-            if not self.settings.enabled:
-                self._ensure_camera_released()
-                self._emit_snapshot(PresenceState.DISABLED)
-            elif self._handle_pause():
-                pass  # 一時停止の処理内で snapshot 送信済み
-            else:
-                self._run_detection_cycle()
+                if self._pending_reconfigure:
+                    self._reconfigure()
+
+                if not self.settings.enabled:
+                    self._ensure_camera_released()
+                    self._emit_snapshot(PresenceState.DISABLED)
+                elif self._handle_pause():
+                    pass  # 一時停止の処理内で snapshot 送信済み
+                else:
+                    self._run_detection_cycle()
+            except Exception:
+                # 1周期の失敗で常駐を諦めない。ただし必ず記録する。
+                # （pythonw 起動では標準エラーの出力先が無く、ここで握り潰すと
+                #   「いつの間にか動かなくなっていた」の原因が追えなくなる）
+                log.exception("判定サイクルで予期しないエラーが発生しました")
+                self.camera.reset()
+                self.msleep(1000)
 
             # チェック間隔を守る（推論に要した時間を差し引く）
+            self._last_cycle_wall = time.time()
             elapsed = time.monotonic() - cycle_started
             sleep_ms = max(20, int(self._current_interval_ms() - elapsed * 1000))
             self.msleep(sleep_ms)
@@ -153,6 +191,48 @@ class DetectionEngine(QThread):
         self.camera.release()
         self.detector.close()
         log.info("判定ループを終了しました")
+
+    def _handle_power_state(self) -> bool:
+        """スリープ / 復帰に対処する。この周期の判定を飛ばすなら True。
+
+        復帰直後はカメラのハンドルが無効になっている（OS 側でデバイスが
+        再列挙されるため）。開いたまま read() し続けても映像は戻らないので、
+        必ず開き直す。止まっていた時間も離席判定に数えない。
+        """
+        if self._suspending:
+            # 復帰通知が来るまでカメラに触らない
+            self._ensure_camera_released()
+            self._emit_snapshot(PresenceState.PAUSED, "スリープ中です")
+            if not self._resume_pending:
+                return True
+            self._suspending = False
+
+        if self._resume_pending:
+            self._resume_pending = False
+            self._recover_from_sleep("電源通知")
+            return True
+
+        # 電源通知が届かない環境向けの保険。実時計の飛びで復帰を推測する。
+        now_wall = time.time()
+        if self._last_cycle_wall is not None:
+            gap = now_wall - self._last_cycle_wall
+            if gap >= SLEEP_GAP_SECONDS:
+                self._recover_from_sleep(f"{gap:.0f} 秒の中断を検知")
+                return True
+        return False
+
+    def _recover_from_sleep(self, reason: str) -> None:
+        log.info("スリープ復帰として再初期化します（%s）", reason)
+        self.camera.reset()
+        self._last_reported_error = ""
+        if self.tracker.state is PresenceState.AWAY:
+            # 眠っている間はオーバーレイを隠している。離席のまま復帰させると
+            # 「離席中なのに画像が出ていない」状態になるので、在席から数え直す。
+            self.tracker.reset()
+        else:
+            self.tracker.restart_timer()
+        self._fullscreen_streak = 0
+        self._last_cycle_wall = time.time()
 
     def _run_detection_cycle(self) -> None:
         if not self.camera.is_open and self.camera.state is CameraState.CLOSED:

@@ -15,6 +15,7 @@ from . import autostart
 from .single_instance import InstanceServer, is_already_running
 from .core.audio import AudioMuter
 from .core.engine import DetectionEngine
+from .core import power_monitor
 from .core.presence import PresenceState
 from .logging_setup import get_logger, setup_logging
 from .settings import Settings
@@ -83,6 +84,13 @@ class AwayCamApp(QObject):
             self.tray.show()
         else:
             log.warning("タスクトレイを利用できない環境です")
+
+        # スリープ / 復帰に追従する（復帰後にカメラが死んだままになるのを防ぐ）
+        self._power_filter = power_monitor.install(
+            app,
+            on_suspend=self._on_system_suspend,
+            on_resume=self._on_system_resume,
+        )
 
         # モニター構成の変更に追従する
         app.screenAdded.connect(self._on_screens_changed)
@@ -165,6 +173,18 @@ class AwayCamApp(QObject):
         self.overlay.hide()
         self.audio.unmute()
         self.engine.force_present()
+
+    # --- 電源イベント ---
+
+    def _on_system_suspend(self) -> None:
+        """スリープ直前。眠っている間に見せる画像も音の細工も要らない。"""
+        self.engine.notify_system_suspend()
+        self.overlay.hide()
+        # ミュートしたまま眠ると、復帰後に音が戻らなくなる
+        self.audio.unmute()
+
+    def _on_system_resume(self) -> None:
+        self.engine.notify_system_resume()
 
     def _on_screens_changed(self, *_args) -> None:
         QTimer.singleShot(

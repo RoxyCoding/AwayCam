@@ -7,3 +7,7 @@ img.png
 logs/
 build/
 dist/
+CHANGELOG.md
+BUILD.md
+LAUNCHER_SPEC.md
+VERSION
